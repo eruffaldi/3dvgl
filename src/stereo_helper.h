@@ -5,8 +5,10 @@
 #include <stdlib.h>
 #include <math.h>
 
+#ifndef __APPLE__
 #include <X11/Xlib.h>
 #include <X11/extensions/xf86vmode.h>
+#endif
 
 #include "nvstusb.h"
 
@@ -124,6 +126,7 @@ namespace StereoHelper {
 // ============================================================================
 
     void ConfigRefreshRate(nvstusb_context *ctx) {
+#ifndef __APPLE__
         Display *display = XOpenDisplay(0);
         double display_num = DefaultScreen(display);
         XF86VidModeModeLine mode_line;
@@ -132,6 +135,7 @@ namespace StereoHelper {
         double frame_rate = (double) pixel_clk * 1000.0 / mode_line.htotal / mode_line.vtotal;
         printf("Detected refresh rate of %f Hz.\n", frame_rate);
         nvstusb_set_rate(ctx, frame_rate);
+#endif
     }
 
     void ProjectCamera(const Camera& cam, float aspect, int eye) {

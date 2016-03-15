@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <unistd.h>
 
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 static struct libusb_context *nvstusb_usb_context = 0;
 static const int nvstusb_usb_debug_level = 3;

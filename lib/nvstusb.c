@@ -12,24 +12,64 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#ifndef __APPLE__
 #include <malloc.h>
+#endif
 #include <time.h>
 #include <assert.h>
 #include <math.h>
 #include <pthread.h>
 
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#else
 #include <GL/gl.h>
 #include <GL/glx.h>
 #include <GL/glxext.h>
 #include <GL/glext.h>
+#endif
 
 #include "nvstusb.h"
 #include "usb.h"
 
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#define ORWL_NANO (+1.0E-9)
+#define ORWL_GIGA UINT64_C(1000000000)
+
+static double orwl_timebase = 0.0;
+static uint64_t orwl_timestart = 0;
+
+struct timespec orwl_gettime(void) {
+// be more careful in a multithreaded environement
+if (!orwl_timestart) {
+  mach_timebase_info_data_t tb = { 0 };
+  mach_timebase_info(&tb);
+  orwl_timebase = tb.numer;
+  orwl_timebase /= tb.denom;
+  orwl_timestart = mach_absolute_time();
+}
+struct timespec t;
+double diff = (mach_absolute_time() - orwl_timestart) * orwl_timebase;
+t.tv_sec = diff * ORWL_NANO;
+t.tv_nsec = diff - (t.tv_sec * ORWL_GIGA);
+return t;
+}
+#else
+struct timespec orwl_gettime(void) {
+  struct timespec x;
+  clock_gettime(CLOCK_REALTIME, &x);
+  return x;
+}
+
+#endif
+
+#ifndef __APPLE__
 static PFNGLXGETVIDEOSYNCSGIPROC glXGetVideoSyncSGI = NULL;
 static PFNGLXWAITVIDEOSYNCSGIPROC glXWaitVideoSyncSGI = NULL;
 static PFNGLXSWAPINTERVALSGIPROC glXSwapIntervalSGI = NULL;
 static PFNGLXSWAPINTERVALEXTPROC glXSwapIntervalEXT = NULL;
+#endif
 
 /* Static functions */
 static void nvstusb_print_refresh_rate(void);
@@ -121,6 +161,7 @@ nvstusb_init(void)
     goto out_err;
   }
 
+#ifndef __APPLE__
   /* Swap interval */
   glXSwapIntervalSGI = (PFNGLXSWAPINTERVALSGIPROC)glXGetProcAddress("glXSwapIntervalSGI");
 
@@ -141,6 +182,7 @@ nvstusb_init(void)
   if (NULL != glXGetVideoSyncSGI ) {
     fprintf(stderr, "nvstusb: GLX_SGI_video_sync supported!\n");
   }
+#endif
 
   fprintf(stderr, "nvstusb:selected vblank method: %d\n", ctx->vblank_method);
 out_err:
@@ -376,7 +418,7 @@ nvstusb_swap(
     {
       unsigned int count;
 
-
+#ifndef __APPLE__
       if(eye == nvstusb_quad) {
         int before_count;
         /* Waiting OpenGL sync, Do not use current count to */
@@ -389,6 +431,7 @@ nvstusb_swap(
         glXGetVideoSyncSGI(&count);
         glXWaitVideoSyncSGI(2, (count+1)%2, &count);
       }
+#endif
 
       /* Change eye */
       nvstusb_set_eye(ctx, eye);
@@ -424,7 +467,9 @@ nvstusb_swap(
 
       /* Swap interval */
       if(i_current_interval != i_interval) {
+#ifndef __APPLE__
         glXSwapIntervalSGI(i_interval);
+#endif
         i_current_interval = i_interval;
       }
 
@@ -523,6 +568,7 @@ void nvstusb_stop_stereo_thread(struct nvstusb_context *ctx)
 /* Stereo thread - For GL_STEREO  */
 static void * nvstusb_stereo_thread(void * in_pv_arg)
 {
+#ifndef __APPLE__
   struct nvstusb_context *ctx = (struct nvstusb_context *) in_pv_arg;
   Display *dpy;
   Window win;
@@ -583,7 +629,7 @@ static void * nvstusb_stereo_thread(void * in_pv_arg)
   /* Destroy context */
   glx_ctx = glXGetCurrentContext();
   glXDestroyContext(dpy, glx_ctx);
-
+#endif
   return NULL;
 }
 
@@ -598,16 +644,14 @@ static void nvstusb_print_refresh_rate(void)
 
   /* First frame */
   if(i_it == 0) {
-    struct timespec s_tmp;
-    clock_gettime(CLOCK_REALTIME, &s_tmp);
+    struct timespec s_tmp = orwl_gettime();
     i_first = (uint64_t)s_tmp.tv_sec*1000000+(uint64_t)s_tmp.tv_nsec/1000;
     i_last = i_first;
     f_mean = 0;
     f_var = 0;
 
   } else {
-    struct timespec s_tmp;
-    clock_gettime(CLOCK_REALTIME, &s_tmp);
+    struct timespec s_tmp = orwl_gettime();
     uint64_t i_new = (uint64_t)s_tmp.tv_sec*1000000+(uint64_t)s_tmp.tv_nsec/1000;
     /* Update average */
     f_mean = (double)(i_new-i_first)/(i_it);

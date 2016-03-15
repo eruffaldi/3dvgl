@@ -1,7 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#include <GLUT/glut.h>
+#else
 #include <GL/glut.h>
+#include <GL/gl.h>
+#endif
 
 extern "C" {
     #include "nvstusb.h"
